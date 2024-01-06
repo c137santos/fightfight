@@ -46,4 +46,8 @@ flask db upgrade
 Para rodar pytest, é importante exportar a variável de ambiente que configura seu ambiente de teste.
 Para melhor performace, você pode usar o SQLite. 
 Como como TEST_DATABASE_URL="sqlite:////tmp/matamata.db"
-# fightfight
+
+# Documentação OpenAPI
+A documentação, gerada pelo flask-pydantic-spec, pode ser acessada através do endpoint /swagger:
+
+http://localhost/apidoc/swagger
