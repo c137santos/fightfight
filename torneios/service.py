@@ -194,7 +194,7 @@ class ResultadoService:
         id_partida: int,
     ) -> int:
         chaveamento_obj = Chave.query.get(id_partida)
-        if chaveamento_obj.torneio_id == id_torneio:
+        if not chaveamento_obj.torneio_id == id_torneio:
             return "ChaveRaise"
         if not chaveamento_obj:
             return "ChaveamentoNotFound"

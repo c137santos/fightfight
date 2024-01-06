@@ -27,6 +27,7 @@ def test_new_competidor_atualiza_qtd_competidores_em_Torneio(db_session, app):
 @pytest.mark.parametrize(
     "compt, rodadas_esperadas",
     [(4, 2), (8, 3), (16, 4), (32, 5), (64, 6), (128, 7), (3, 2), (70, 7)],
+    "",
 )
 def test_qtd_rodada_por_duplas(compt, rodadas_esperadas):
     rodadas = ChaveamentoService.rodada_por_qtd_competidores(compt)
@@ -40,6 +41,9 @@ def test_cadastrar_resultado_classificacao(db_session, app):
         torneio = Torneio(nome_torneio=nome_torneio)
         competidor_a = Competidor(nome_competidor="Clara", torneio_id=torneio.id)
         competidor_b = Competidor(nome_competidor="Santos", torneio_id=torneio.id)
+        resultado_partida = models_pydantic.ResultadoPartidaRequest(
+            resultado_comp_a=2, resultado_comp_b=1
+        )
         chavinha = Chave(
             torneio_id=torneio.id,
             rodada=4,
@@ -50,8 +54,10 @@ def test_cadastrar_resultado_classificacao(db_session, app):
 
         db_session.add(chavinha)
         db_session.commit()
-        result = ResultadoService.cadastrar_resultado(chavinha.id)
-        assert result == "Classificado vencedor para próxima chave"
+        result = ResultadoService.cadastrar_resultado(
+            resultado_partida, torneio.id, chavinha.id
+        )
+        assert result == "ChaveamentoNoDisponivel"
 
 
 def criar_sublista_em_pares(lista):
@@ -214,7 +220,7 @@ def test_sorteia_chaveamento_primeira_fase(db_session, app):
         assert len(lista_b) == 4
 
 
-def test_cadastrar_resultado_dois(db_session, app):
+def test_cadastrar_resultado(db_session, app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Perola")
         db_session.add(torneio)
@@ -225,7 +231,9 @@ def test_cadastrar_resultado_dois(db_session, app):
         db_session.add(competidor_b)
         db_session.commit()
         partida = Chave(torneio.id, 4, "a", competidor_a.id, competidor_b.id)
+        proxima_chave = Chave(torneio.id, 3, "a")
         db_session.add(partida)
+        db_session.add(proxima_chave)
         db_session.commit()
         resultado_partida = models_pydantic.ResultadoPartidaRequest(
             resultado_comp_a=2, resultado_comp_b=1
