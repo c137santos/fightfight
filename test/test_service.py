@@ -306,12 +306,10 @@ def test_classificacao_das_finais(db_session, app):
         vencedor_id = competidor_a.id
         perdedor_id = competidor_b.id
 
-        # Chame a função que você deseja testar
         resultado = ResultadoService.classificao_das_finais(
             chavinha, vencedor_id, perdedor_id, torneio
         )
 
-        # Agora você pode adicionar asserções para verificar se a função está agindo conforme o esperado
         assert resultado == "Classificação das finais"
 
 
@@ -319,6 +317,7 @@ def test_buscar_topquatro_com_classificacao(client, db_session, app):
     nome_torneio = "Rankeia"
     with app.app_context():
         torneio = Torneio(nome_torneio=nome_torneio)
+        torneio.is_chaveado = True
         db_session.add(torneio)
         db_session.commit()
 

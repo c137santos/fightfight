@@ -6,7 +6,7 @@ from torneios.service import PendingClassification, ResultadoService
 
 def test_view_torneio_simples(client):
     response = client.get("/tournament")
-    assert response.status_code == 200
+    assert response.status_code == 404
 
 
 def test_view_torneio_return_201(client, db_session):
@@ -29,7 +29,7 @@ def test_cadastrar_competidor_torneio_not_found(client):
     response = client.post(
         "/tournament/60/competidor", json={"nome_competidor": "Competidor 1"}
     )
-    assert response.status_code == 500
+    assert response.status_code == 404
     assert response.json["message"] == "Torneio não encontrado"
 
 
@@ -43,7 +43,10 @@ def test_buscar_topquatro_torneio_not_closed(client, db_session):
     db_session.commit()
     response = client.get(f"/tournament/{torneio.id}/result")
     assert response.status_code == 401
-    assert response.json["message"] == "Torneio ainda não foi chaveado"
+    assert (
+        response.json["message"]
+        == "Classificação não está disponível, pois não houve chaveamento"
+    )
 
 
 def test_buscar_topquatro_torneio_pending_classification(client, db_session):
@@ -61,3 +64,9 @@ def test_buscar_topquatro_torneio_pending_classification(client, db_session):
         response.json["message"]
         == "Classificação não está disponível, pois não houve chaveamento"
     )
+
+
+def test_listar_torneios_torneio_not_found(client, db_session):
+    response = client.get("/tournament", json={})
+    assert response.status_code == 404
+    assert response.json["message"] == "Torneio não encontrado"

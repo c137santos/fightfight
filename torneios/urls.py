@@ -16,11 +16,18 @@ from .models_pydantic import (
     CompetidoresResponse,
 )
 from .service import (
+    BracketingWithResultError,
+    ChaveRaise,
+    ChaveamentoNotAvailable,
+    ChaveamentoNotFound,
     ChaveamentoService,
+    CompetidoresNotFoundError,
     CreateError,
     PendingClassification,
     ResultadoService,
+    TorneioClosed,
     TorneioNotClosed,
+    TorneioNotFoundError,
     TorneioService,
     CompetidorService,
 )
@@ -36,15 +43,20 @@ def torneio():
     data: Torneio = request.context.body
     try:
         torneio_id = TorneioService.criar_torneio(data)
-        return make_response(jsonify({"id": torneio_id}), 201)
     except CreateError:
         return make_response(jsonify({"message": "Error"}), 500)
+    return make_response(jsonify({"id": torneio_id}), 201)
 
 
 @api_blueprint.get("/tournament")
-@spec.validate(query=FiltroTorneio, resp=Response(HTTP_200=TorneioResponse))
+@spec.validate(
+    query=FiltroTorneio, resp=Response(HTTP_200=TorneioResponse, HTTP_404=ErrorResponse)
+)
 def liste_torneios():
-    lista_torneios_objs = TorneioService.buscar_torneio(dict(request.context.query))
+    try:
+        lista_torneios_objs = TorneioService.buscar_torneio(dict(request.context.query))
+    except TorneioNotFoundError as exc:
+        return make_response(jsonify({"message": exc.message}), exc.status_code)
     json_lista_objetos_torneios = [
         {
             "id": torneio.id,
@@ -58,26 +70,30 @@ def liste_torneios():
 
 
 @api_blueprint.post("/tournament/<int:id_torneio>/competidor")
-@spec.validate(body=Request(CompetidorRequest), resp=Response(HTTP_201=IdResponse))
+@spec.validate(
+    body=Request(CompetidorRequest),
+    resp=Response(HTTP_201=IdResponse, HTTP_401=ErrorResponse, HTTP_403=ErrorResponse),
+)
 def cadastrar_competidor(id_torneio: int):
     data: CompetidorRequest = request.context.body
-    response = CompetidorService.cadastrar_competidor(data, id_torneio)
-    if response == "TorneioNotFoundError":
-        return make_response(jsonify({"message": "Torneio não encontrado"}), 500)
-    if response == "TorneioClosed":
-        return make_response(
-            jsonify({"error": "Torneio não pode receber mais competidores"}), 403
-        )
+    try:
+        response = CompetidorService.cadastrar_competidor(data, id_torneio)
+    except (TorneioClosed, TorneioNotFoundError) as exc:
+        return make_response(jsonify({"message": exc.message}), exc.status_code)
     return make_response(jsonify({"id": response}), 201)
 
 
 @api_blueprint.get("/tournament/<int:id_torneio>/competidores")
-@spec.validate(resp=Response(HTTP_200=CompetidoresResponse))
+@spec.validate(
+    resp=Response(
+        HTTP_200=CompetidoresResponse, HTTP_404=ErrorResponse, HTTP_401=ErrorResponse
+    )
+)
 def buscar_competidores_torneio(id_torneio: int):
-    lista_competidores_objs = CompetidorService.buscar_competidores(id_torneio)
-    if lista_competidores_objs == "TorneioNotFoundError":
-        return make_response(jsonify({"message": "Torneio não encontrado"}), 404)
-
+    try:
+        lista_competidores_objs = CompetidorService.buscar_competidores(id_torneio)
+    except (TorneioNotFoundError, CompetidoresNotFoundError) as exc:
+        return make_response(jsonify({"message": exc.message}), exc.status_code)
     json_lista_competidores_objs = [
         {"id": competidor.id, "nome": competidor.nome_competidor}
         for competidor in lista_competidores_objs
@@ -86,14 +102,12 @@ def buscar_competidores_torneio(id_torneio: int):
 
 
 @api_blueprint.get("/tournament/<int:id_torneio>/match")
-@spec.validate(resp=Response(HTTP_200=ChaveamentoResponse))
+@spec.validate(resp=Response(HTTP_200=ChaveamentoResponse, HTTP_404=ErrorResponse))
 def buscar_chaveamento(id_torneio: int):
-    chaveamentos_obj = ChaveamentoService.busca_chaveamento(id_torneio)
-    if chaveamentos_obj == "NotEnoughCompetitor":
-        return make_response(
-            jsonify({"Error": "Torneio com menos de 8 competidores cadastrados"}), 404
-        )
-
+    try:
+        chaveamentos_obj = ChaveamentoService.busca_chaveamento(id_torneio)
+    except TorneioNotFoundError as exc:
+        return make_response(jsonify({"message": exc.message}), exc.status_code)
     json_chaveamentos_obj = [
         {
             "id": chave.id,
@@ -116,23 +130,22 @@ def buscar_chaveamento(id_torneio: int):
 
 @api_blueprint.post("/tournament/<int:id_torneio>/match/<int:id_partida>")
 @spec.validate(
-    body=Request(ResultadoPartidaRequest), resp=Response(HTTP_201=ResultadoResponse)
+    body=Request(ResultadoPartidaRequest),
+    resp=Response(
+        HTTP_201=ResultadoResponse, HTTP_422=ErrorResponse, HTTP_401=ErrorResponse
+    ),
 )
 def inserir_resultado_partida(id_torneio: int, id_partida: int):
     data: ResultadoPartidaRequest = request.context.body
     try:
-        response = ResultadoService.cadastrar_resultado(data, id_torneio, id_partida)
-    except Exception as ex:
-        return make_response(jsonify({"message": "Error", "detail": str(ex)}), 500)
-    if response == "ChaveamentoComResultado":
-        return make_response(
-            jsonify({"message": "Resultado Já existente. Não pode ser substituido"}),
-            401,
-        )
-    if response == "chaveRaise":
-        return make_response(
-            jsonify({"message": "Essa chave não pertence a esse torneio"}), 401
-        )
+        ResultadoService.cadastrar_resultado(data, id_torneio, id_partida)
+    except (
+        ChaveRaise,
+        BracketingWithResultError,
+        ChaveamentoNotFound,
+        ChaveamentoNotAvailable,
+    ) as exc:
+        return make_response(jsonify({"message": exc.message}), exc.status_code)
     return make_response(jsonify({"message": "Resultado registrado"}), 201)
 
 
@@ -140,11 +153,7 @@ def inserir_resultado_partida(id_torneio: int, id_partida: int):
 @spec.validate(resp=Response(HTTP_200=ClassificationResponse, HTTP_401=ErrorResponse))
 def buscar_topquatro(id_torneio: int):
     try:
-        return ResultadoService.buscar_resultado_top(id_torneio)
-    except PendingClassification:
-        message = "Classificação não está disponível, pois não houve chaveamento"
-        status_code = 401
-    except TorneioNotClosed:
-        message = "Torneio ainda não foi chaveado"
-        status_code = 401
-    return make_response(jsonify({"message": message}), status_code)
+        response = ResultadoService.buscar_resultado_top(id_torneio)
+    except (PendingClassification, TorneioNotClosed) as exc:
+        return make_response(jsonify({"message": exc.message}), exc.status_code)
+    return make_response(jsonify({"message": response}), 200)

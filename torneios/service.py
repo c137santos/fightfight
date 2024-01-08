@@ -22,7 +22,10 @@ class TorneioService:
 
     @staticmethod
     def buscar_torneio(filtros):
-        return Torneio.query.all()
+        torneio = Torneio.query.all()
+        if not torneio:
+            raise TorneioNotFoundError
+        return torneio
 
     @staticmethod
     def atualizar_qtd_competidores(torneio):
@@ -39,9 +42,9 @@ class CompetidorService:
         torneio = Torneio.query.get(id_torneio)
 
         if not torneio:
-            return "TorneioNotFoundError"
+            raise TorneioNotFoundError
         if torneio.is_chaveado:
-            return "TorneioClosed"
+            raise TorneioClosed
         try:
             nova_equipe = Competidor(
                 nome_competidor=competidor.nome_competidor, torneio_id=id_torneio
@@ -58,7 +61,11 @@ class CompetidorService:
 
     @staticmethod
     def buscar_competidores(torneio_id):
-        return Competidor.query.filter_by(torneio_id=torneio_id)
+        TorneioService.buscar_torneio(torneio_id)
+        competidores = Competidor.query.filter_by(torneio_id=torneio_id)
+        if not competidores:
+            raise CompetidoresNotFoundError
+        return competidores
 
 
 class ChaveamentoService:
@@ -69,6 +76,7 @@ class ChaveamentoService:
     @staticmethod
     def busca_chaveamento(id_torneio: int) -> int:
         torneio = Torneio.query.get(id_torneio)
+        TorneioService.buscar_torneio(id_torneio)
         if not torneio.is_chaveado:
             (
                 numero_primeira_rodada,
@@ -194,14 +202,14 @@ class ResultadoService:
         id_partida: int,
     ) -> int:
         chaveamento_obj = Chave.query.get(id_partida)
-        if not chaveamento_obj.torneio_id == id_torneio:
-            return "ChaveRaise"
         if not chaveamento_obj:
-            return "ChaveamentoNotFound"
+            raise ChaveamentoNotFound
+        if not chaveamento_obj.torneio_id == id_torneio:
+            raise ChaveRaise
         if chaveamento_obj.vencedor:
-            return "ChaveamentoComResultado"
+            raise BracketingWithResultError
         if not chaveamento_obj.competidor_a_id or not chaveamento_obj.competidor_b_id:
-            return "ChaveamentoNoDisponivel"
+            raise ChaveamentoNotAvailable
         vencedor_id = (
             chaveamento_obj.competidor_a_id
             if resultado.resultado_comp_a > resultado.resultado_comp_b
@@ -297,16 +305,45 @@ class CreateError(RuntimeError):
 
 
 class TorneioNotFoundError(Exception):
-    ...
+    message = "Torneio não encontrado"
+    status_code = 404
 
 
 class TorneioClosed(Exception):
-    ...
+    message = "Torneio está fechado"
+    status_code = 403
 
 
 class TorneioNotClosed(Exception):
-    ...
+    message = "Torneio ainda não foi chaveado"
+    status_code = 401
 
 
 class PendingClassification(Exception):
-    ...
+    message = "Classificação não está disponível, pois não houve chaveamento"
+    status_code = 401
+
+
+class ChaveRaise(Exception):
+    message = "Essa chave não pertence a esse torneio"
+    status_code = 401
+
+
+class BracketingWithResultError(Exception):
+    message = "Resultado já existente. Não pode ser substituido"
+    status_code = 422
+
+
+class ChaveamentoNotFound(Exception):
+    message = "O Chaveamento não existe"
+    status_code = 401
+
+
+class ChaveamentoNotAvailable(Exception):
+    message = "O chaveamento não contém dados suficientes para receber um resultado"
+    status_code = 422
+
+
+class CompetidoresNotFoundError(Exception):
+    message = "Não foram encontrados competidores nesse torneio"
+    status_code = 401
