@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 
 from pydantic import BaseModel
 
@@ -9,6 +9,10 @@ class Message(BaseModel):
 
 class IdResponse(BaseModel):
     id: str
+
+
+class ClassificationResponse(BaseModel):
+    classification: Dict[str, None]
 
 
 class Torneio(BaseModel):
@@ -73,4 +77,8 @@ class ResultadoCreate(BaseModel):
 
 
 class NotImplementedResponse(BaseModel):
+    message: str
+
+
+class ErrorResponse(BaseModel):
     message: str

@@ -313,3 +313,63 @@ def test_classificacao_das_finais(db_session, app):
 
         # Agora você pode adicionar asserções para verificar se a função está agindo conforme o esperado
         assert resultado == "Classificação das finais"
+
+
+def test_buscar_topquatro_com_classificacao(client, db_session, app):
+    nome_torneio = "Rankeia"
+    with app.app_context():
+        torneio = Torneio(nome_torneio=nome_torneio)
+        db_session.add(torneio)
+        db_session.commit()
+
+        competidor_primeiro_lugar = Competidor(
+            nome_competidor="Segundo Lugar", torneio_id=torneio.id
+        )
+        competidor_segundo_lugar = Competidor(
+            nome_competidor="Primeiro Lugar", torneio_id=torneio.id
+        )
+        competidor_terceiro = Competidor(
+            nome_competidor="Terceiro", torneio_id=torneio.id
+        )
+        competidor_quarto = Competidor(nome_competidor="Quarto", torneio_id=torneio.id)
+        db_session.add(competidor_primeiro_lugar)
+        db_session.add(competidor_segundo_lugar)
+        db_session.add(competidor_terceiro)
+        db_session.add(competidor_quarto)
+        db_session.commit()
+
+        chaveFinal = Chave(
+            torneio_id=torneio.id,
+            rodada=1,
+            grupo="f",
+            competidor_a_id=competidor_primeiro_lugar.id,
+            competidor_b_id=competidor_segundo_lugar.id,
+        )
+        chaveFinal.resultado_comp_a = 1
+        chaveFinal.resultado_comp_b = 2
+        db_session.add(chaveFinal)
+        db_session.commit()
+        chaveFinal.vencedor_id = competidor_segundo_lugar.id
+        db_session.commit()
+
+        chaveTerceira = Chave(
+            torneio_id=torneio.id,
+            rodada=0,
+            grupo="f",
+            competidor_a_id=competidor_terceiro.id,
+            competidor_b_id=competidor_quarto.id,
+        )
+        chaveTerceira.resultado_comp_a = 1
+        chaveTerceira.resultado_comp_b = 0
+        chaveTerceira.vencedor_id = competidor_terceiro.id
+        db_session.add(chaveTerceira)
+        db_session.commit()
+        dict_classificacao = ResultadoService.buscar_resultado_top(torneio.id)
+        assert "Terceiro" in dict_classificacao
+        assert competidor_terceiro.id == dict_classificacao["Terceiro"].id
+        assert "Quarto" in dict_classificacao
+        assert competidor_quarto.id == dict_classificacao["Quarto"].id
+        assert "Primeiro" in dict_classificacao
+        assert dict_classificacao["Primeiro"].id == competidor_segundo_lugar.id
+        assert "Segundo" in dict_classificacao
+        assert dict_classificacao["Segundo"].id == competidor_primeiro_lugar.id

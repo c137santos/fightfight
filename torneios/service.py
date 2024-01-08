@@ -258,6 +258,39 @@ class ResultadoService:
         db.session.commit()
         return "Classificação das finais"
 
+    @staticmethod
+    def buscar_resultado_top(torneio_id):
+        torneio = Torneio.query.get(torneio_id)
+        if not torneio:
+            raise TorneioNotFoundError
+        if torneio.is_chaveado is False:
+            raise TorneioNotClosed
+        chaves = (
+            Chave.query.filter_by(torneio_id=torneio_id)
+            .filter(Chave.rodada.in_([1, 0]))
+            .order_by(Chave.rodada.asc())
+            .all()
+        )
+        dict_classificacao = {}
+        for chave in chaves:
+            if chave.rodada == 1:
+                dict_classificacao["Primeiro"] = chave.vencedor
+                dict_classificacao["Segundo"] = (
+                    chave.competidor_a
+                    if chave.vencedor != chave.competidor_a
+                    else chave.competidor_b
+                )
+            else:
+                dict_classificacao["Terceiro"] = chave.vencedor
+                dict_classificacao["Quarto"] = (
+                    chave.competidor_a
+                    if chave.vencedor != chave.competidor_a
+                    else chave.competidor_b
+                )
+        if all(value is None for value in dict_classificacao.values()):
+            raise PendingClassification
+        return dict_classificacao
+
 
 class CreateError(RuntimeError):
     ...
@@ -268,4 +301,12 @@ class TorneioNotFoundError(Exception):
 
 
 class TorneioClosed(Exception):
+    ...
+
+
+class TorneioNotClosed(Exception):
+    ...
+
+
+class PendingClassification(Exception):
     ...

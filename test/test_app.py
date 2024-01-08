@@ -1,4 +1,7 @@
 from torneios.models import Torneio
+from unittest.mock import patch
+
+from torneios.service import PendingClassification, ResultadoService
 
 
 def test_view_torneio_simples(client):
@@ -31,3 +34,30 @@ def test_cadastrar_competidor_torneio_not_found(client):
 
 
 # TODO: organizar erros da forma que o flask merece https://flask.palletsprojects.com/en/2.3.x/errorhandling/
+
+
+def test_buscar_topquatro_torneio_not_closed(client, db_session):
+    torneio = Torneio(nome_torneio="Primeiro torneio")
+    torneio.is_chaveado = True
+    db_session.add(torneio)
+    db_session.commit()
+    response = client.get(f"/tournament/{torneio.id}/result")
+    assert response.status_code == 401
+    assert response.json["message"] == "Torneio ainda não foi chaveado"
+
+
+def test_buscar_topquatro_torneio_pending_classification(client, db_session):
+    torneio = Torneio(nome_torneio="Primeiro torneio")
+    torneio.is_chaveado = True
+    db_session.add(torneio)
+    db_session.commit()
+    with patch.object(
+        ResultadoService, "buscar_resultado_top", side_effect=PendingClassification
+    ):
+        response = client.get(f"/tournament/{torneio.id}/result")
+    response = client.get(f"/tournament/{torneio.id}/result")
+    assert response.status_code == 401
+    assert (
+        response.json["message"]
+        == "Classificação não está disponível, pois não houve chaveamento"
+    )

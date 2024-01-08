@@ -4,8 +4,9 @@ from flask_pydantic_spec import Request, Response
 from . import spec
 from .models_pydantic import (
     ChaveamentoResponse,
+    ClassificationResponse,
+    ErrorResponse,
     FiltroTorneio,
-    NotImplementedResponse,
     ResultadoPartidaRequest,
     ResultadoResponse,
     Torneio,
@@ -17,7 +18,9 @@ from .models_pydantic import (
 from .service import (
     ChaveamentoService,
     CreateError,
+    PendingClassification,
     ResultadoService,
+    TorneioNotClosed,
     TorneioService,
     CompetidorService,
 )
@@ -134,6 +137,14 @@ def inserir_resultado_partida(id_torneio: int, id_partida: int):
 
 
 @api_blueprint.get("/tournament/<int:id_torneio>/result")
-@spec.validate(resp=Response(HTTP_501=NotImplementedResponse))
+@spec.validate(resp=Response(HTTP_200=ClassificationResponse, HTTP_401=ErrorResponse))
 def buscar_topquatro(id_torneio: int):
-    return make_response(jsonify({"message": "Método em implementação"}), 501)
+    try:
+        return ResultadoService.buscar_resultado_top(id_torneio)
+    except PendingClassification:
+        message = "Classificação não está disponível, pois não houve chaveamento"
+        status_code = 401
+    except TorneioNotClosed:
+        message = "Torneio ainda não foi chaveado"
+        status_code = 401
+    return make_response(jsonify({"message": message}), status_code)
