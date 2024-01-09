@@ -17,16 +17,16 @@ from .models_pydantic import (
 )
 from .service import (
     BracketingWithResultError,
-    ChaveRaise,
-    ChaveamentoNotAvailable,
-    ChaveamentoNotFound,
+    ChaveRaiseError,
+    ChaveamentoNotAvailableError,
+    ChaveamentoNotFoundError,
     ChaveamentoService,
     CompetidoresNotFoundError,
     CreateError,
     PendingClassification,
     ResultadoService,
-    TorneioClosed,
-    TorneioNotClosed,
+    TorneioClosedError,
+    TorneioNotClosedError,
     TorneioNotFoundError,
     TorneioService,
     CompetidorService,
@@ -54,7 +54,7 @@ def torneio():
 )
 def liste_torneios():
     try:
-        lista_torneios_objs = TorneioService.buscar_torneio(dict(request.context.query))
+        lista_torneios_objs = TorneioService.buscar_torneio(request.context.query)
     except TorneioNotFoundError as exc:
         return make_response(jsonify({"message": exc.message}), exc.status_code)
     json_lista_objetos_torneios = [
@@ -78,7 +78,7 @@ def cadastrar_competidor(id_torneio: int):
     data: CompetidorRequest = request.context.body
     try:
         response = CompetidorService.cadastrar_competidor(data, id_torneio)
-    except (TorneioClosed, TorneioNotFoundError) as exc:
+    except (TorneioClosedError, TorneioNotFoundError) as exc:
         return make_response(jsonify({"message": exc.message}), exc.status_code)
     return make_response(jsonify({"id": response}), 201)
 
@@ -140,10 +140,10 @@ def inserir_resultado_partida(id_torneio: int, id_partida: int):
     try:
         ResultadoService.cadastrar_resultado(data, id_torneio, id_partida)
     except (
-        ChaveRaise,
+        ChaveRaiseError,
         BracketingWithResultError,
-        ChaveamentoNotFound,
-        ChaveamentoNotAvailable,
+        ChaveamentoNotFoundError,
+        ChaveamentoNotAvailableError,
     ) as exc:
         return make_response(jsonify({"message": exc.message}), exc.status_code)
     return make_response(jsonify({"message": "Resultado registrado"}), 201)
@@ -154,6 +154,6 @@ def inserir_resultado_partida(id_torneio: int, id_partida: int):
 def buscar_topquatro(id_torneio: int):
     try:
         response = ResultadoService.buscar_resultado_top(id_torneio)
-    except (PendingClassification, TorneioNotClosed) as exc:
+    except (PendingClassification, TorneioNotClosedError) as exc:
         return make_response(jsonify({"message": exc.message}), exc.status_code)
     return make_response(jsonify({"message": response}), 200)

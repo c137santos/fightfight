@@ -20,8 +20,8 @@ class Torneio(BaseModel):
 
 
 class FiltroTorneio(BaseModel):
-    id: Optional[str] = None
-    nome_torneio: Optional[str] = "nome"
+    id: Optional[str]
+    nome_torneio: Optional[str]
 
 
 class TorneioResponse(BaseModel):

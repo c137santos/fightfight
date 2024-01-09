@@ -22,10 +22,20 @@ class TorneioService:
 
     @staticmethod
     def buscar_torneio(filtros):
-        torneio = Torneio.query.all()
-        if not torneio:
+        query = Torneio.query
+        if filtros.id:
+            if query.filter(Torneio.id == filtros.id).count():
+                return query.filter(Torneio.id == filtros.id).all()
+            else:
+                return []
+        if filtros.nome_torneio:
+            query = query.filter(
+                Torneio.nome_torneio.ilike(f"%{filtros.nome_torneio}%")
+            )
+        result = query.all()
+        if not result:
             raise TorneioNotFoundError
-        return torneio
+        return result
 
     @staticmethod
     def atualizar_qtd_competidores(torneio):
@@ -44,7 +54,7 @@ class CompetidorService:
         if not torneio:
             raise TorneioNotFoundError
         if torneio.is_chaveado:
-            raise TorneioClosed
+            raise TorneioClosedError
         try:
             nova_equipe = Competidor(
                 nome_competidor=competidor.nome_competidor, torneio_id=id_torneio
@@ -61,7 +71,8 @@ class CompetidorService:
 
     @staticmethod
     def buscar_competidores(torneio_id):
-        TorneioService.buscar_torneio(torneio_id)
+        filtro = models_pydantic.FiltroTorneio(id=torneio_id)
+        TorneioService.buscar_torneio(filtro)
         competidores = Competidor.query.filter_by(torneio_id=torneio_id)
         if not competidores:
             raise CompetidoresNotFoundError
@@ -76,7 +87,8 @@ class ChaveamentoService:
     @staticmethod
     def busca_chaveamento(id_torneio: int) -> int:
         torneio = Torneio.query.get(id_torneio)
-        TorneioService.buscar_torneio(id_torneio)
+        filtro = models_pydantic.FiltroTorneio(id=torneio.id)
+        TorneioService.buscar_torneio(filtro)
         if not torneio.is_chaveado:
             (
                 numero_primeira_rodada,
@@ -162,13 +174,14 @@ class ChaveamentoService:
 
     @staticmethod
     def criar_rodadas_subsequentes(rodada, total_disputas_primeira_fase, torneio):
-        total_ultimas_disputas = total_disputas_primeira_fase
+        total_disputas_ultimas_rodada = total_disputas_primeira_fase
         rodada_atual = rodada - 1  # Rodada subsequente a que foi informada
         lista_chaves_criadas = []
         while rodada_atual > 1:
-            vagas = math.ceil(total_ultimas_disputas / 4)
+            duplas_por_grupo = total_disputas_ultimas_rodada / 4
+            vagas_duplas_por_grupo = math.ceil(duplas_por_grupo)
             chaveamento_atual = []
-            for _ in range(vagas):
+            for _ in range(vagas_duplas_por_grupo):
                 for grupo in ["a", "b"]:
                     nova_chave = Chave(
                         torneio_id=torneio.id, rodada=rodada_atual, grupo=grupo
@@ -178,7 +191,7 @@ class ChaveamentoService:
             lista_chaves_criadas.append(chaveamento_atual)
             db.session.commit()
             rodada_atual -= 1
-            total_ultimas_disputas = vagas * 2
+            total_disputas_ultimas_rodada = vagas_duplas_por_grupo * 2
 
         chave_final = Chave(torneio_id=torneio.id, rodada=rodada_atual, grupo="f")
         lista_chaves_criadas.append(chave_final)
@@ -203,13 +216,13 @@ class ResultadoService:
     ) -> int:
         chaveamento_obj = Chave.query.get(id_partida)
         if not chaveamento_obj:
-            raise ChaveamentoNotFound
+            raise ChaveamentoNotFoundError
         if not chaveamento_obj.torneio_id == id_torneio:
-            raise ChaveRaise
+            raise ChaveRaiseError
         if chaveamento_obj.vencedor:
             raise BracketingWithResultError
         if not chaveamento_obj.competidor_a_id or not chaveamento_obj.competidor_b_id:
-            raise ChaveamentoNotAvailable
+            raise ChaveamentoNotAvailableError
         vencedor_id = (
             chaveamento_obj.competidor_a_id
             if resultado.resultado_comp_a > resultado.resultado_comp_b
@@ -272,7 +285,7 @@ class ResultadoService:
         if not torneio:
             raise TorneioNotFoundError
         if torneio.is_chaveado is False:
-            raise TorneioNotClosed
+            raise TorneioNotClosedError
         chaves = (
             Chave.query.filter_by(torneio_id=torneio_id)
             .filter(Chave.rodada.in_([1, 0]))
@@ -309,12 +322,12 @@ class TorneioNotFoundError(Exception):
     status_code = 404
 
 
-class TorneioClosed(Exception):
+class TorneioClosedError(Exception):
     message = "Torneio está fechado"
     status_code = 403
 
 
-class TorneioNotClosed(Exception):
+class TorneioNotClosedError(Exception):
     message = "Torneio ainda não foi chaveado"
     status_code = 401
 
@@ -324,7 +337,7 @@ class PendingClassification(Exception):
     status_code = 401
 
 
-class ChaveRaise(Exception):
+class ChaveRaiseError(Exception):
     message = "Essa chave não pertence a esse torneio"
     status_code = 401
 
@@ -334,12 +347,12 @@ class BracketingWithResultError(Exception):
     status_code = 422
 
 
-class ChaveamentoNotFound(Exception):
+class ChaveamentoNotFoundError(Exception):
     message = "O Chaveamento não existe"
     status_code = 401
 
 
-class ChaveamentoNotAvailable(Exception):
+class ChaveamentoNotAvailableError(Exception):
     message = "O chaveamento não contém dados suficientes para receber um resultado"
     status_code = 422
 

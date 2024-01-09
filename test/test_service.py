@@ -2,10 +2,11 @@ from collections import defaultdict
 from torneios import models_pydantic
 from torneios.models import Chave, Torneio, Competidor
 from torneios.service import (
-    ChaveamentoNotAvailable,
+    ChaveamentoNotAvailableError,
     CompetidorService,
     ChaveamentoService,
     ResultadoService,
+    TorneioService,
 )
 import pytest
 
@@ -273,7 +274,7 @@ def test_tentativa_cadastrar_resultado_sem_comp(db_session, app):
         resultado_partida = models_pydantic.ResultadoPartidaRequest(
             resultado_comp_a=2, resultado_comp_b=1
         )
-        with pytest.raises(ChaveamentoNotAvailable):
+        with pytest.raises(ChaveamentoNotAvailableError):
             ResultadoService.cadastrar_resultado(
                 resultado_partida, torneio.id, partida.id
             )
@@ -384,3 +385,39 @@ def test_buscar_topquatro_com_classificacao(client, db_session, app):
         assert dict_classificacao["Primeiro"].id == competidor_segundo_lugar.id
         assert "Segundo" in dict_classificacao
         assert dict_classificacao["Segundo"].id == competidor_primeiro_lugar.id
+
+
+def test_buscar_torneio_por_id(db_session, app):
+    with app.app_context():
+        torneio = Torneio(nome_torneio="Exemplo")
+        db_session.add(torneio)
+        db_session.commit()
+        filtros = models_pydantic.FiltroTorneio(id=torneio.id)
+        result = TorneioService.buscar_torneio(filtros)
+        assert torneio.id == result[0].id
+
+
+def test_buscar_torneio_por_nome_torneio(db_session, app):
+    with app.app_context():
+        torneio = Torneio(nome_torneio="Exemplo")
+        torneio_com_outro_nome = Torneio(nome_torneio="Outro nome")
+        torneio_nome_tres = Torneio(nome_torneio="Nomee outro")
+        db_session.add(torneio)
+        db_session.add(torneio_com_outro_nome)
+        db_session.add(torneio_nome_tres)
+        db_session.commit()
+        filtros = models_pydantic.FiltroTorneio(nome_torneio="Exemplo")
+        result = TorneioService.buscar_torneio(filtros)
+        assert torneio.id == result[0].id
+
+
+def test_buscar_torneio_sem_filtros(db_session, app):
+    with app.app_context():
+        torneio1 = Torneio(nome_torneio="Exemplo1")
+        torneio2 = Torneio(nome_torneio="Exemplo2")
+        db_session.add(torneio1)
+        db_session.add(torneio2)
+        db_session.commit()
+        result = TorneioService.buscar_torneio(models_pydantic.FiltroTorneio())
+        assert torneio1.id in [t.id for t in result]
+        assert torneio2.id in [t.id for t in result]
