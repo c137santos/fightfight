@@ -2,6 +2,7 @@ from collections import defaultdict
 from torneios import models_pydantic
 from torneios.models import Chave, Torneio, Competidor
 from torneios.service import (
+    ChaveamentoNotAvailable,
     CompetidorService,
     ChaveamentoService,
     ResultadoService,
@@ -44,6 +45,10 @@ def test_cadastrar_resultado_classificacao(db_session, app):
         resultado_partida = models_pydantic.ResultadoPartidaRequest(
             resultado_comp_a=2, resultado_comp_b=1
         )
+        db_session.add(competidor_a)
+        db_session.add(competidor_b)
+        db_session.add(torneio)
+        db_session.commit()
         chavinha = Chave(
             torneio_id=torneio.id,
             rodada=4,
@@ -51,13 +56,20 @@ def test_cadastrar_resultado_classificacao(db_session, app):
             competidor_b_id=competidor_b.id,
             grupo="a",
         )
+        proxima_chave = Chave(torneio_id=torneio.id, rodada=3, grupo="a")
 
         db_session.add(chavinha)
+        db_session.add(proxima_chave)
         db_session.commit()
-        result = ResultadoService.cadastrar_resultado(
+        response = ResultadoService.cadastrar_resultado(
             resultado_partida, torneio.id, chavinha.id
         )
-        assert result == "ChaveamentoNoDisponivel"
+        assert isinstance(response, Chave)
+        assert response.torneio_id == torneio.id
+        assert response.rodada == 4
+        assert response.grupo != "f"
+        assert response.grupo == "a"
+        assert response.vencedor.id == competidor_a.id
 
 
 def criar_sublista_em_pares(lista):
@@ -247,7 +259,7 @@ def test_cadastrar_resultado(db_session, app):
         assert partida_atualizada.vencedor.id == competidor_a.id
 
 
-def test_cadastrar_resultado_sem_comp(db_session, app):
+def test_tentativa_cadastrar_resultado_sem_comp(db_session, app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Perola")
         db_session.add(torneio)
@@ -261,10 +273,10 @@ def test_cadastrar_resultado_sem_comp(db_session, app):
         resultado_partida = models_pydantic.ResultadoPartidaRequest(
             resultado_comp_a=2, resultado_comp_b=1
         )
-        partida_atualizada = ResultadoService.cadastrar_resultado(
-            resultado_partida, torneio.id, partida.id
-        )
-        assert partida_atualizada == "ChaveamentoNoDisponivel"
+        with pytest.raises(ChaveamentoNotAvailable):
+            ResultadoService.cadastrar_resultado(
+                resultado_partida, torneio.id, partida.id
+            )
 
 
 def test_classificacao_das_finais(db_session, app):
