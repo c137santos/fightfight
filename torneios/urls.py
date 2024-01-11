@@ -122,6 +122,9 @@ def buscar_chaveamento(id_torneio: int):
             ),
             "grupo": chave.grupo,
             "vencedor": chave.vencedor.to_dict() if chave.vencedor else None,
+            "is_bye": chave.bye,
+            "resultado_a": chave.resultado_comp_a,
+            "resultado_b": chave.resultado_comp_b,
         }
         for chave in chaveamentos_obj
     ]

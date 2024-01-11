@@ -87,21 +87,58 @@ class ChaveamentoService:
     @staticmethod
     def busca_chaveamento(id_torneio: int) -> int:
         torneio = Torneio.query.get(id_torneio)
-        filtro = models_pydantic.FiltroTorneio(id=torneio.id)
+        filtro = models_pydantic.FiltroTorneio(id=torneio.id)  # tem duas vezes filtros
         TorneioService.buscar_torneio(filtro)
         if not torneio.is_chaveado:
             (
-                numero_primeira_rodada,
+                n_primeira_rodada,
                 lista_geral_primeira_rodada,
+                qtd_comps_ga,
+                qtd_comps_gb,
             ) = ChaveamentoService.sorteia_chaveamento_primeira_fase(torneio)
             ChaveamentoService.criar_rodadas_subsequentes(
-                numero_primeira_rodada, len(lista_geral_primeira_rodada), torneio
+                n_primeira_rodada, len(lista_geral_primeira_rodada), torneio
+            )
+            ChaveamentoService.marca_rodadas_bye(
+                n_primeira_rodada, qtd_comps_ga, qtd_comps_gb, torneio.id
             )
             torneio.is_chaveado = True
             db.session.add(torneio)
             db.session.commit()
         lista_chaveada = ChaveamentoService.get_chavemaneto_sorteado(id_torneio)
         return lista_chaveada
+
+    @staticmethod
+    def marca_rodadas_bye(n_primeira_rodada, qtd_comps_ga, qtd_comps_gb, torneio_id):
+        count = 0
+        rodada_atual = n_primeira_rodada - 1
+        while rodada_atual > 1:
+            qtd_comps_ga = math.ceil(qtd_comps_ga / 2)  # 5-> 3
+            qtd_comps_gb = math.ceil(qtd_comps_gb / 2)  # 5 -> 3
+            if qtd_comps_ga % 2 != 0:
+                ChaveamentoService.sorteia_rodada_como_bye(
+                    torneio_id, rodada_atual, "a"
+                )
+                count += 1
+            if qtd_comps_gb % 2 != 0:
+                ChaveamentoService.sorteia_rodada_como_bye(
+                    torneio_id, rodada_atual, "b"
+                )
+                count += 1
+            rodada_atual -= 1
+
+        return count
+
+    @staticmethod
+    def sorteia_rodada_como_bye(torneio_id, n_rodada, grupo):
+        filtros = models_pydantic.FiltroChave(
+            torneio_id=torneio_id, rodada=n_rodada, grupo=grupo
+        )
+        rodadas = ChaveamentoService.filtra_chaves_rodada(filtros)
+        random.shuffle(rodadas)
+        rodada_bye = rodadas[0]
+        rodada_bye.bye = True
+        db.session.commit()
 
     @staticmethod
     def sorteia_chaveamento_primeira_fase(torneio):
@@ -114,9 +151,11 @@ class ChaveamentoService:
         numero_primeira_rodada = ChaveamentoService.rodada_por_qtd_competidores(
             len(competidores_torneio)
         )
-        if len(grupo_a) % 2 != 0:
+        qtd_comps_ga = len(grupo_a)
+        qtd_comps_gb = len(grupo_b)
+        if qtd_comps_ga % 2 != 0:
             grupo_a.append(None)
-        if len(grupo_b) % 2 != 0:
+        if qtd_comps_gb % 2 != 0:
             grupo_b.append(None)
         duplas_ga = ChaveamentoService.sortea_duplas_grupo(grupo_a)
         duplas_gb = ChaveamentoService.sortea_duplas_grupo(grupo_b)
@@ -136,7 +175,9 @@ class ChaveamentoService:
         return (
             numero_primeira_rodada,
             lista_geral_primeira_rodada,
-        )  # 16 disputas, um chaveamento de 8
+            qtd_comps_ga,
+            qtd_comps_gb,
+        )
 
     @staticmethod
     def rodada_por_qtd_competidores(total_competidores):
@@ -167,6 +208,7 @@ class ChaveamentoService:
                 chave_obj.competidor_b_id = dupla[1].id
             if dupla[0] is None or dupla[1] is None:
                 chave_obj.vencedor = db.session.merge(dupla[0] or dupla[1])
+                chave_obj.bye = True
             db.session.add(chave_obj)
             lista_primeira_partida.append(chave_obj)
         db.session.commit()
@@ -204,6 +246,22 @@ class ChaveamentoService:
         db.session.commit()
 
         return lista_chaves_criadas
+
+    @staticmethod
+    def filtra_chaves_rodada(filtros):
+        query = Chave.query
+        if filtros.torneio_id:
+            chaveamentos_torneios = query.filter(
+                Chave.torneio_id == filtros.torneio_id
+            ).count()
+            if not chaveamentos_torneios:
+                raise TorneioNotClosedError
+            query = query.filter(Chave.torneio_id == filtros.torneio_id)
+        if filtros.rodada:
+            query = query.filter(Chave.rodada == filtros.rodada)
+        if filtros.grupo:
+            query = query.filter(Chave.grupo == filtros.grupo)
+        return query.all()
 
 
 class ResultadoService:

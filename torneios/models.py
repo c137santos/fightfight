@@ -48,6 +48,7 @@ class Chave(db.Model):
     competidor_b_id = db.Column(db.Integer, db.ForeignKey("competidor.id"))
     rodada = db.Column(db.Integer)
     grupo = db.Column(db.String(), default="s")
+    bye = db.Column(db.Boolean, default=False)
     resultado_comp_a = db.Column(db.Integer)
     resultado_comp_b = db.Column(db.Integer)
     vencedor_id = db.Column(db.Integer, db.ForeignKey("competidor.id"))

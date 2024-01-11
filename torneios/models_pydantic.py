@@ -24,6 +24,12 @@ class FiltroTorneio(BaseModel):
     nome_torneio: Optional[str]
 
 
+class FiltroChave(BaseModel):
+    torneio_id: int
+    rodada: Optional[int]
+    grupo: Optional[str]
+
+
 class TorneioResponse(BaseModel):
     torneios: List[Torneio]
 

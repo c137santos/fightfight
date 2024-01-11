@@ -6,6 +6,7 @@ from torneios.service import (
     CompetidorService,
     ChaveamentoService,
     ResultadoService,
+    TorneioNotClosedError,
     TorneioService,
 )
 import pytest
@@ -421,3 +422,110 @@ def test_buscar_torneio_sem_filtros(db_session, app):
         result = TorneioService.buscar_torneio(models_pydantic.FiltroTorneio())
         assert torneio1.id in [t.id for t in result]
         assert torneio2.id in [t.id for t in result]
+
+
+def test_filtra_chaves_rodada_torneio_not_closed(db_session, app):
+    filtro_pydantic = models_pydantic.FiltroChave(torneio_id=1, rodada=2)
+    with app.app_context():
+        with pytest.raises(TorneioNotClosedError):
+            ChaveamentoService.filtra_chaves_rodada(filtro_pydantic)
+
+
+def test_filtra_chaves_rodada(db_session, app):
+    with app.app_context():
+        torneio = Torneio(nome_torneio="Torneiozao")
+        db_session.add(torneio)
+        db_session.commit()
+        for i in range(8):
+            chave = Chave(torneio_id=torneio.id, rodada=4, grupo="a")
+            db_session.add(chave)
+            db_session.commit()
+        for i in range(4):
+            chave = Chave(torneio_id=torneio.id, rodada=3, grupo="a")
+            db_session.add(chave)
+            db_session.commit()
+        for i in range(4):
+            chave = Chave(torneio_id=555, rodada=4, grupo="a")
+            db_session.add(chave)
+            db_session.commit()
+        filtro_pydantic = models_pydantic.FiltroChave(
+            torneio_id=torneio.id, rodada=4, grupo="a"
+        )
+        resultado = ChaveamentoService.filtra_chaves_rodada(filtro_pydantic)
+        assert len(resultado) == 8
+        assert all(torneio.id == t.torneio_id for t in resultado)
+
+
+def test_filtra_chaves_grupo(db_session, app):
+    with app.app_context():
+        torneio = Torneio(nome_torneio="Torneiozao")
+        db_session.add(torneio)
+        db_session.commit()
+        for i in range(8):
+            chave = Chave(torneio_id=torneio.id, rodada=4, grupo="a")
+            db_session.add(chave)
+            db_session.commit()
+        for i in range(4):
+            chave = Chave(torneio_id=torneio.id, rodada=4, grupo="b")
+            db_session.add(chave)
+            db_session.commit()
+        filtro_pydantic = models_pydantic.FiltroChave(
+            torneio_id=torneio.id, rodada=4, grupo="a"
+        )
+        resultado = ChaveamentoService.filtra_chaves_rodada(filtro_pydantic)
+        assert len(resultado) == 8
+        assert torneio.id in [t.torneio_id for t in resultado]
+        assert all(elemento == "a" for elemento in [t.grupo for t in resultado])
+
+
+def test_filtra_chaves_torneio(db_session, app):
+    with app.app_context():
+        torneio = Torneio(nome_torneio="Torneiozao")
+        db_session.add(torneio)
+        db_session.commit()
+        for i in range(8):
+            chave = Chave(torneio_id=torneio.id, rodada=4, grupo="a")
+            db_session.add(chave)
+            db_session.commit()
+        for i in range(4):
+            chave = Chave(torneio_id=torneio.id, rodada=4, grupo="b")
+            db_session.add(chave)
+            db_session.commit()
+        filtro_pydantic = models_pydantic.FiltroChave(torneio_id=torneio.id)
+        resultado = ChaveamentoService.filtra_chaves_rodada(filtro_pydantic)
+        assert len(resultado) == 16
+        assert torneio.id in [t.torneio_id for t in resultado]
+
+
+@pytest.mark.parametrize(
+    "qtd_comp, byes_esperados",
+    [
+        (
+            4,
+            0,
+        ),  # Caso com o número mínimo de competidores (caso limite). Potencia de 2 não tem byes.
+        (8, 0),  # Caso com 8 competidores. Potência de 2 não tem byes.
+        (10, 2),  # Caso com 10 competidores, esperando 2 byes para rodadas subsequentes
+        (16, 0),  # Caso com 16 compts. Potência de 2 não tem byes.
+        (
+            20,
+            4,
+        ),  # Caso com 20 competidores, par, mas não é potência de 2. 2 byes para rodadas subsequentes
+        (25, 2),  # Caso com um número ímpar de competidores.
+    ],
+)
+def test_marca_rodadas_bye(qtd_comp, byes_esperados, db_session, app):
+    with app.app_context():
+        torneio = Torneio(nome_torneio="Torneiozao")
+        db_session.add(torneio)
+        db_session.commit()
+        for i in range(qtd_comp):
+            comp = Competidor(nome_competidor=i, torneio_id=torneio.id)
+            db_session.add(comp)
+            db_session.commit()
+        n, lista_g, qa, qb = ChaveamentoService.sorteia_chaveamento_primeira_fase(
+            torneio
+        )
+        ChaveamentoService.criar_rodadas_subsequentes(n, len(lista_g), torneio)
+        count_bye = ChaveamentoService.marca_rodadas_bye(n, qa, qb, torneio.id)
+        assert count_bye == byes_esperados
