@@ -159,4 +159,12 @@ def buscar_topquatro(id_torneio: int):
         response = ResultadoService.buscar_resultado_top(id_torneio)
     except (PendingClassification, TorneioNotClosedError) as exc:
         return make_response(jsonify({"message": exc.message}), exc.status_code)
-    return make_response(jsonify({"message": response}), 200)
+    json_topquatro = [
+        {
+            "Primeiro lugar": response["Terceiro"].nome_competidor,
+            "Segundo lugar": response["Segundo"].nome_competidor,
+            "Terceiro Lugar": response["Terceiro"].nome_competidor,
+            "Quarto lugar": response["Quarto"].nome_competidor,
+        }
+    ]
+    return make_response(jsonify({"message": json_topquatro}), 200)

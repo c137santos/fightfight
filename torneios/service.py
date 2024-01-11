@@ -27,14 +27,14 @@ class TorneioService:
             if query.filter(Torneio.id == filtros.id).count():
                 return query.filter(Torneio.id == filtros.id).all()
             else:
-                return []
+                raise TorneioNotFoundError
         if filtros.nome_torneio:
             query = query.filter(
                 Torneio.nome_torneio.ilike(f"%{filtros.nome_torneio}%")
             )
         result = query.all()
         if not result:
-            raise TorneioNotFoundError
+            return []
         return result
 
     @staticmethod
@@ -81,7 +81,7 @@ class CompetidorService:
 
 class ChaveamentoService:
     @staticmethod
-    def get_chavemaneto_sorteado(id_torneio):
+    def get_chavemaneto_sorteado(id_torneio):  # se é get, pega só um
         return Chave.query.filter_by(torneio_id=id_torneio).all()
 
     @staticmethod
@@ -105,16 +105,19 @@ class ChaveamentoService:
             torneio.is_chaveado = True
             db.session.add(torneio)
             db.session.commit()
-        lista_chaveada = ChaveamentoService.get_chavemaneto_sorteado(id_torneio)
-        return lista_chaveada
+        ResultadoService.classifica_proxima_rodada_bybye(torneio.id)
+        lista_chaveamentos_torneio = ChaveamentoService.get_chavemaneto_sorteado(
+            id_torneio
+        )
+        return lista_chaveamentos_torneio
 
     @staticmethod
     def marca_rodadas_bye(n_primeira_rodada, qtd_comps_ga, qtd_comps_gb, torneio_id):
         count = 0
         rodada_atual = n_primeira_rodada - 1
         while rodada_atual > 1:
-            qtd_comps_ga = math.ceil(qtd_comps_ga / 2)  # 5-> 3
-            qtd_comps_gb = math.ceil(qtd_comps_gb / 2)  # 5 -> 3
+            qtd_comps_ga = math.ceil(qtd_comps_ga / 2)
+            qtd_comps_gb = math.ceil(qtd_comps_gb / 2)
             if qtd_comps_ga % 2 != 0:
                 ChaveamentoService.sorteia_rodada_como_bye(
                     torneio_id, rodada_atual, "a"
@@ -217,7 +220,7 @@ class ChaveamentoService:
     @staticmethod
     def criar_rodadas_subsequentes(rodada, total_disputas_primeira_fase, torneio):
         total_disputas_ultimas_rodada = total_disputas_primeira_fase
-        rodada_atual = rodada - 1  # Rodada subsequente a que foi informada
+        rodada_atual = rodada - 1
         lista_chaves_criadas = []
         while rodada_atual > 1:
             duplas_por_grupo = total_disputas_ultimas_rodada / 4
@@ -265,9 +268,8 @@ class ChaveamentoService:
 
 
 class ResultadoService:
-    @classmethod
+    @staticmethod
     def cadastrar_resultado(
-        cls,
         resultado: models_pydantic.ResultadoPartidaRequest,
         id_torneio: int,
         id_partida: int,
@@ -301,28 +303,60 @@ class ResultadoService:
         )
         return chaveamento_obj
 
-    @classmethod
+    @staticmethod
     def classificar_proxima_rodada(
-        cls, vencedor_id, perdedor_id, chaveamento_obj, id_torneio
+        vencedor_id, perdedor_id, chaveamento_obj, id_torneio
     ):
         torneio = Torneio.query.get(id_torneio)
         proxima_rodada = chaveamento_obj.rodada - 1
-        aviso_classificao_terceiro = "."
         if proxima_rodada == 1:
             return ResultadoService.classificao_das_finais(
                 chaveamento_obj, vencedor_id, perdedor_id, torneio
             )
+        if proxima_rodada == 0:
+            return
 
-        proxima_chave_grupo = "a" if chaveamento_obj.grupo == "a" else "b"
-        proxima_chave = Chave.query.filter_by(
-            rodada=proxima_rodada, grupo=proxima_chave_grupo
-        ).first()
-        setattr(proxima_chave, f"competidor_{chaveamento_obj.grupo}_id", vencedor_id)
-
-        db.session.add(proxima_chave)
+        proxima_chave = (
+            Chave.query.filter_by(rodada=proxima_rodada, grupo=chaveamento_obj.grupo)
+            .filter(
+                (Chave.competidor_a_id.is_(None)) | (Chave.competidor_b_id.is_(None))
+            )
+            .first()
+        )
+        if not proxima_chave.competidor_a_id:
+            proxima_chave.competidor_a_id = vencedor_id
+        else:
+            proxima_chave.competidor_b_id = vencedor_id
         db.session.commit()
 
-        return f"Classificado vencedor para próxima chave {proxima_chave}{aviso_classificao_terceiro}"
+        return proxima_chave
+
+    @staticmethod
+    def classifica_proxima_rodada_bybye(torneio_id):
+        lista_chaveamentos_torneio = ChaveamentoService.get_chavemaneto_sorteado(
+            torneio_id
+        )
+        for chave in lista_chaveamentos_torneio.copy():
+            if chave.bye and chave.rodada > 1 and not chave.classificado_bye:
+                if not chave.competidor_a and not chave.competidor_b:
+                    continue
+                vencedor_bye = chave.competidor_a or chave.competidor_b
+                chave.vencedor = vencedor_bye
+                chave.classificado_bye = True
+                db.session.commit()
+                proxima_rodada = chave.rodada - 1
+                proxima_chave = Chave.query.filter_by(
+                    rodada=proxima_rodada,
+                    grupo=chave.grupo,
+                    bye=False,
+                    torneio_id=torneio_id,
+                ).first()
+                if chave.grupo == "a":
+                    proxima_chave.competidor_a = vencedor_bye
+                else:
+                    proxima_chave.competidor_b = vencedor_bye
+                db.session.commit()
+        return lista_chaveamentos_torneio
 
     @classmethod
     def classificao_das_finais(cls, chaveamento_obj, vencedor_id, perdedor_id, torneio):

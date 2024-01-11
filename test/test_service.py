@@ -221,6 +221,8 @@ def test_sorteia_chaveamento_primeira_fase(db_session, app):
         (
             numero_primeira_rodada,
             lista_geral_primeira_rodada,
+            _,
+            _,
         ) = ChaveamentoService.sorteia_chaveamento_primeira_fase(torneio)
         assert len(lista_geral_primeira_rodada) == 8
         assert all(isinstance(chave, Chave) for chave in lista_geral_primeira_rodada)
@@ -493,7 +495,7 @@ def test_filtra_chaves_torneio(db_session, app):
             db_session.commit()
         filtro_pydantic = models_pydantic.FiltroChave(torneio_id=torneio.id)
         resultado = ChaveamentoService.filtra_chaves_rodada(filtro_pydantic)
-        assert len(resultado) == 16
+        assert len(resultado) == 12
         assert torneio.id in [t.torneio_id for t in resultado]
 
 
@@ -529,3 +531,182 @@ def test_marca_rodadas_bye(qtd_comp, byes_esperados, db_session, app):
         ChaveamentoService.criar_rodadas_subsequentes(n, len(lista_g), torneio)
         count_bye = ChaveamentoService.marca_rodadas_bye(n, qa, qb, torneio.id)
         assert count_bye == byes_esperados
+
+
+@pytest.fixture
+def torneio_byes(db_session, app):
+    with app.app_context():
+        torneio = Torneio(nome_torneio="Frida")
+        db_session.add(torneio)
+        db_session.commit()
+        for nome in "abcdefghij":  # 10 competidores
+            i = Competidor(nome_competidor=nome, torneio_id=torneio.id)
+            db_session.add(i)
+        db_session.commit()
+        (
+            n_primeira_rodada,
+            lista_geral_primeira_rodada,
+            qtd_comps_ga,
+            qtd_comps_gb,
+        ) = ChaveamentoService.sorteia_chaveamento_primeira_fase(torneio)
+        ChaveamentoService.criar_rodadas_subsequentes(
+            n_primeira_rodada, len(lista_geral_primeira_rodada), torneio
+        )
+        ChaveamentoService.marca_rodadas_bye(
+            n_primeira_rodada, qtd_comps_ga, qtd_comps_gb, torneio.id
+        )
+        torneio.is_chaveado = True
+        db_session.add(torneio)
+        db_session.commit()
+        return torneio.id
+
+
+def test_busca_verificar_passagem_automatica_byebyes(db_session, app, torneio_byes):
+    with app.app_context():
+        torneio_id = torneio_byes
+        lista_chaveada_primeira_rodada = (
+            ResultadoService.classifica_proxima_rodada_bybye(torneio_id)
+        )
+        count = 0
+        for chave in lista_chaveada_primeira_rodada:
+            if chave.bye and (chave.competidor_a or chave.competidor_b):
+                assert chave.vencedor_id is not None
+                assert chave.rodada in [
+                    3,
+                    4,
+                ]  # verifica que todos bye=True com competidor e vencedor são da 4 e 3
+                assert chave.rodada not in [
+                    2,
+                    1,
+                    0,
+                ]  # verifica que não há competidor bye escalados para rodadas 2, 1, 0
+                count += 1
+            if chave.rodada == 3 and (
+                chave.competidor_a or chave.competidor_b
+            ):  # verifica terceira rodada de byes
+                assert (
+                    chave.bye is False
+                )  # Verifica se comp vindo de um bye não deve ser chavedo para outro bye
+                assert chave.vencedor is None  # Não deve ter vencedor atribuido
+        if chave.rodada in [2, 1, 0]:
+            assert chave.competidor_a is None
+            assert chave.competidor_b is None
+            assert chave.vencedor is None
+        assert count == 2  # só deve existir 2 byes da oitavas a quartas.
+        assert len(lista_chaveada_primeira_rodada) == 14
+
+
+def test_busca_verificar_passagem_automatica_byebyes_segunda_rodada(
+    db_session, app, torneio_byes
+):
+    with app.app_context():
+        torneio_id = torneio_byes
+        lista_chaveada_primeira_rodada = (
+            ResultadoService.classifica_proxima_rodada_bybye(torneio_id)
+        )
+        competidor_qualquer = Competidor(
+            nome_competidor="Qualquer", torneio_id=torneio_id
+        )
+        for chave in lista_chaveada_primeira_rodada:
+            if chave.rodada == 3 and chave.bye is True:  # byes de terceira rodada
+                chave.competidor_b is None
+                chave.competidor_a is None
+                chave.competidor_a = competidor_qualquer
+                db_session.commit()
+        rechamada = ResultadoService.classifica_proxima_rodada_bybye(torneio_id)
+        assert len(rechamada) == 14
+        for chave in rechamada:
+            if chave.rodada == 2 and chave.bye is False:
+                assert chave.competidor_a or chave.competidor_b
+                assert chave.vencedor is None
+
+
+def test_busca_nao_ocorre_passagem_automatica_byebyes_chave_perfeita(db_session, app):
+    with app.app_context():
+        torneio = Torneio(nome_torneio="Frida")
+        db_session.add(torneio)
+        db_session.commit()
+        for nome in "abcdefgh":  # 8 competidores
+            i = Competidor(nome_competidor=nome, torneio_id=torneio.id)
+            db_session.add(i)
+        db_session.commit()
+        (
+            n_primeira_rodada,
+            lista_geral_primeira_rodada,
+            qtd_comps_ga,
+            qtd_comps_gb,
+        ) = ChaveamentoService.sorteia_chaveamento_primeira_fase(torneio)
+        ChaveamentoService.criar_rodadas_subsequentes(
+            n_primeira_rodada, len(lista_geral_primeira_rodada), torneio
+        )
+        ChaveamentoService.marca_rodadas_bye(
+            n_primeira_rodada, qtd_comps_ga, qtd_comps_gb, torneio.id
+        )
+        torneio.is_chaveado = True
+        db_session.add(torneio)
+        db_session.commit()
+        lista_chaveada = ResultadoService.classifica_proxima_rodada_bybye(torneio.id)
+        for chave in lista_chaveada:
+            assert chave.bye is False
+            assert chave.vencedor is None
+        assert len(lista_chaveada) == 8
+
+
+def test_classificar_proxima_rodada(db_session, app):
+    nome_torneio = "Rankeia"
+
+    with app.app_context():
+        torneio = Torneio(nome_torneio=nome_torneio)
+        competidor_a = Competidor(nome_competidor="Clara", torneio_id=torneio.id)
+        competidor_b = Competidor(nome_competidor="Santos", torneio_id=torneio.id)
+        competidor_a_ja_classificado = Competidor(
+            nome_competidor="Santos", torneio_id=torneio.id
+        )
+        resultado_partida = models_pydantic.ResultadoPartidaRequest(
+            resultado_comp_a=2, resultado_comp_b=1
+        )
+        db_session.add(competidor_a)
+        db_session.add(competidor_b)
+        db_session.add(competidor_a_ja_classificado)
+        db_session.add(torneio)
+        db_session.commit()
+
+        chaveamento_obj = Chave(
+            torneio_id=torneio.id,
+            rodada=4,
+            competidor_a_id=competidor_a.id,
+            competidor_b_id=competidor_b.id,
+            grupo="a",
+        )
+        chaveamento_obj.resultado_comp_a = resultado_partida.resultado_comp_a
+        chaveamento_obj.resultado_comp_b = resultado_partida.resultado_comp_b
+        chaveamento_obj.vencedor_id = competidor_a.id
+        proxima_chave_com_compts = Chave(
+            torneio_id=torneio.id,
+            rodada=3,
+            grupo="a",
+            competidor_a_id=competidor_a_ja_classificado.id,
+            competidor_b_id=competidor_b.id,
+        )
+        proxima_chave_sem_compts = Chave(
+            torneio_id=torneio.id,
+            rodada=3,
+            grupo="a",
+            competidor_a_id=competidor_a_ja_classificado.id,
+        )
+
+        db_session.add(chaveamento_obj)
+        db_session.add(chaveamento_obj)
+        db_session.add(proxima_chave_com_compts)
+        db_session.add(proxima_chave_sem_compts)
+        db_session.commit()
+        response = ResultadoService.classificar_proxima_rodada(
+            chaveamento_obj.vencedor_id, competidor_b.id, chaveamento_obj, torneio.id
+        )
+        assert isinstance(response, Chave)
+        assert response.torneio_id == torneio.id
+        assert response.id == proxima_chave_sem_compts.id
+        assert response.rodada == 3
+        assert response.grupo == "a"
+        assert response.competidor_a_id == competidor_a_ja_classificado.id
+        assert response.competidor_b_id == competidor_a.id
