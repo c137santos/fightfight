@@ -6,7 +6,7 @@ from torneios.service import PendingClassification, ResultadoService
 
 def test_view_torneio_simples(client):
     response = client.get("/tournament")
-    assert response.status_code == 404
+    assert response.status_code == 200
 
 
 def test_view_torneio_return_201(client, db_session):
@@ -69,5 +69,5 @@ def test_buscar_topquatro_torneio_pending_classification(client, db_session, app
 def test_listar_torneios_torneio_not_found(client, db_session, app):
     with app.app_context():
         response = client.get("/tournament", json={"id": 1})
-        assert response.status_code == 404
-        assert response.json["message"] == "Torneio não encontrado"
+        assert response.status_code == 200
+        assert response.json == {'torneios': []}
