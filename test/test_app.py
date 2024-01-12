@@ -70,4 +70,4 @@ def test_listar_torneios_torneio_not_found(client, db_session, app):
     with app.app_context():
         response = client.get("/tournament", json={"id": 1})
         assert response.status_code == 200
-        assert response.json == {'torneios': []}
+        assert response.json == {"torneios": []}

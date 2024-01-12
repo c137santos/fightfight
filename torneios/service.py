@@ -87,8 +87,8 @@ class ChaveamentoService:
     @staticmethod
     def busca_chaveamento(id_torneio: int) -> int:
         torneio = Torneio.query.get(id_torneio)
-        filtro = models_pydantic.FiltroTorneio(id=torneio.id)  # tem duas vezes filtros
-        TorneioService.buscar_torneio(filtro)
+        if torneio is None:
+            raise TorneioNotFoundError
         if not torneio.is_chaveado:
             (
                 n_primeira_rodada,

@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, make_response
+from flask import Blueprint, request
 from flask_pydantic_spec import Request, Response
 
 from . import spec
@@ -44,8 +44,8 @@ def torneio():
     try:
         torneio_id = TorneioService.criar_torneio(data)
     except CreateError:
-        return make_response(jsonify({"message": "Error"}), 500)
-    return make_response(jsonify({"id": torneio_id}), 201)
+        return {"message": "Error"}, 500
+    return {"id": torneio_id}, 201
 
 
 @api_blueprint.get("/tournament")
@@ -56,7 +56,7 @@ def liste_torneios():
     try:
         lista_torneios_objs = TorneioService.buscar_torneio(request.context.query)
     except TorneioNotFoundError as exc:
-        return make_response(jsonify({"message": exc.message}), exc.status_code)
+        return {"message": exc.message}, exc.status_code
     json_lista_objetos_torneios = [
         {
             "id": torneio.id,
@@ -66,7 +66,7 @@ def liste_torneios():
         }
         for torneio in lista_torneios_objs
     ]
-    return make_response(jsonify({"torneios": json_lista_objetos_torneios}), 200)
+    return {"torneios": json_lista_objetos_torneios}, 200
 
 
 @api_blueprint.post("/tournament/<int:id_torneio>/competidor")
@@ -79,8 +79,8 @@ def cadastrar_competidor(id_torneio: int):
     try:
         response = CompetidorService.cadastrar_competidor(data, id_torneio)
     except (TorneioClosedError, TorneioNotFoundError) as exc:
-        return make_response(jsonify({"message": exc.message}), exc.status_code)
-    return make_response(jsonify({"id": response}), 201)
+        return {"message": exc.message}, exc.status_code
+    return {"id": response}, 201
 
 
 @api_blueprint.get("/tournament/<int:id_torneio>/competidores")
@@ -93,12 +93,12 @@ def buscar_competidores_torneio(id_torneio: int):
     try:
         lista_competidores_objs = CompetidorService.buscar_competidores(id_torneio)
     except (TorneioNotFoundError, CompetidoresNotFoundError) as exc:
-        return make_response(jsonify({"message": exc.message}), exc.status_code)
+        return {"message": exc.message}, exc.status_code
     json_lista_competidores_objs = [
         {"id": competidor.id, "nome": competidor.nome_competidor}
         for competidor in lista_competidores_objs
     ]
-    return make_response(jsonify({"competidores": json_lista_competidores_objs}), 200)
+    return {"competidores": json_lista_competidores_objs}, 200
 
 
 @api_blueprint.get("/tournament/<int:id_torneio>/match")
@@ -107,7 +107,7 @@ def buscar_chaveamento(id_torneio: int):
     try:
         chaveamentos_obj = ChaveamentoService.busca_chaveamento(id_torneio)
     except TorneioNotFoundError as exc:
-        return make_response(jsonify({"message": exc.message}), exc.status_code)
+        return {"message": exc.message}, exc.status_code
     json_chaveamentos_obj = [
         {
             "id": chave.id,
@@ -128,7 +128,7 @@ def buscar_chaveamento(id_torneio: int):
         }
         for chave in chaveamentos_obj
     ]
-    return make_response(jsonify({"chaveamentos": json_chaveamentos_obj}), 200)
+    return {"chaveamentos": json_chaveamentos_obj}, 200
 
 
 @api_blueprint.post("/tournament/<int:id_torneio>/match/<int:id_partida>")
@@ -148,8 +148,8 @@ def inserir_resultado_partida(id_torneio: int, id_partida: int):
         ChaveamentoNotFoundError,
         ChaveamentoNotAvailableError,
     ) as exc:
-        return make_response(jsonify({"message": exc.message}), exc.status_code)
-    return make_response(jsonify({"message": "Resultado registrado"}), 201)
+        return {"message": exc.message}, exc.status_code
+    return {"message": "Resultado registrado"}, 201
 
 
 @api_blueprint.get("/tournament/<int:id_torneio>/result")
@@ -158,7 +158,7 @@ def buscar_topquatro(id_torneio: int):
     try:
         response = ResultadoService.buscar_resultado_top(id_torneio)
     except (PendingClassification, TorneioNotClosedError) as exc:
-        return make_response(jsonify({"message": exc.message}), exc.status_code)
+        return {"message": exc.message}, exc.status_code
     json_topquatro = [
         {
             "Primeiro lugar": response["Terceiro"].nome_competidor,
@@ -167,4 +167,4 @@ def buscar_topquatro(id_torneio: int):
             "Quarto lugar": response["Quarto"].nome_competidor,
         }
     ]
-    return make_response(jsonify({"message": json_topquatro}), 200)
+    return {"message": json_topquatro}, 200
