@@ -11,7 +11,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     env:
-      TEST_DATABASE_URL: sqlite:///test_db.sqlite
+      TEST_DATABASE_URL="sqlite://:memory: pytest"
       CONFIG_MODE: testing
     strategy:
       fail-fast: false
