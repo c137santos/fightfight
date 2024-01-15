@@ -1,3 +1,4 @@
+import os
 from torneios.models import Torneio
 from unittest.mock import patch
 
@@ -9,14 +10,14 @@ def test_view_torneio_simples(client):
     assert response.status_code == 200
 
 
-def test_view_torneio_return_201(client, db_session):
+def test_view_torneio_return_201(client):
     payload = {"nome_torneio": "Primeiro torneio"}
     response = client.post("/tournament", json=payload)
     assert response.status_code == 201
     assert response.json["id"] is not None
 
 
-def test_view_criar_return_201(client, db_session):
+def test_view_criar_return_201(client, db_session, app):
     torneio = Torneio(nome_torneio="Primeiro torneio")
     db_session.add(torneio)
     db_session.commit()
@@ -66,8 +67,14 @@ def test_buscar_topquatro_torneio_pending_classification(client, db_session, app
         )
 
 
-def test_listar_torneios_torneio_not_found(client, db_session, app):
+def test_listar_torneios_torneio_not_found(client, app):
     with app.app_context():
         response = client.get("/tournament", json={"id": 1})
         assert response.status_code == 200
         assert response.json == {"torneios": []}
+
+
+def test_testing_config(app):
+    assert app.config["DEBUG"]
+    assert app.config["TESTING"]
+    assert app.config["SQLALCHEMY_DATABASE_URI"] == os.environ.get("TEST_DATABASE_URL")
