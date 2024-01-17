@@ -1,5 +1,5 @@
 from collections import defaultdict
-from torneios import models_pydantic
+from torneios import models_pydantic, db
 from torneios.models import Chave, Torneio, Competidor
 from torneios.service import (
     ChaveamentoNotAvailableError,
@@ -12,18 +12,18 @@ from torneios.service import (
 import pytest
 
 
-def test_new_competidor_atualiza_qtd_competidores_em_Torneio(db_session, app):
+def test_new_competidor_atualiza_qtd_competidores_em_Torneio(app):
     nome_torneio = "Aumenta qtd competidores"
 
     with app.app_context():
         torneio = Torneio(nome_torneio=nome_torneio)
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         assert torneio.qtd_competidores == 0
         competidor = Competidor(nome_competidor="Competidor1", torneio_id=torneio.id)
         CompetidorService.cadastrar_competidor(competidor, torneio.id)
-        db_session.commit()
-        torneio_modificado = db_session.query(Torneio).get(torneio.id)
+        db.session.commit()
+        torneio_modificado = db.session.query(Torneio).get(torneio.id)
         assert torneio_modificado.qtd_competidores == 1
 
 
@@ -37,7 +37,7 @@ def test_qtd_rodada_por_duplas(compt, rodadas_esperadas):
     assert rodadas == rodadas_esperadas
 
 
-def test_cadastrar_resultado_classificacao(db_session, app):
+def test_cadastrar_resultado_classificacao(app):
     nome_torneio = "Rankeia"
 
     with app.app_context():
@@ -47,10 +47,10 @@ def test_cadastrar_resultado_classificacao(db_session, app):
         resultado_partida = models_pydantic.ResultadoPartidaRequest(
             resultado_comp_a=2, resultado_comp_b=1
         )
-        db_session.add(competidor_a)
-        db_session.add(competidor_b)
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(competidor_a)
+        db.session.add(competidor_b)
+        db.session.add(torneio)
+        db.session.commit()
         chavinha = Chave(
             torneio_id=torneio.id,
             rodada=4,
@@ -60,9 +60,9 @@ def test_cadastrar_resultado_classificacao(db_session, app):
         )
         proxima_chave = Chave(torneio_id=torneio.id, rodada=3, grupo="a")
 
-        db_session.add(chavinha)
-        db_session.add(proxima_chave)
-        db_session.commit()
+        db.session.add(chavinha)
+        db.session.add(proxima_chave)
+        db.session.commit()
         response = ResultadoService.cadastrar_resultado(
             resultado_partida, torneio.id, chavinha.id
         )
@@ -82,18 +82,18 @@ def criar_sublista_em_pares(lista):
     return dupla_ga, dupla_gb
 
 
-def test_inserir_duplas_primeira_rodada_chave_perfeita(db_session, app):
+def test_inserir_duplas_primeira_rodada_chave_perfeita(app):
     nome_torneio = "Rankeia"
     with app.app_context():
         torneio = Torneio(nome_torneio=nome_torneio)
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         lista_de_competidores = []
         for nome in "abcdefghijklmnop":
             i = Competidor(nome_competidor=nome, torneio_id=torneio.id)
             lista_de_competidores.append(i)
-            db_session.add(i)
-        db_session.commit()
+            db.session.add(i)
+        db.session.commit()
         dupla_ga, _ = criar_sublista_em_pares(lista_de_competidores)
         response = ChaveamentoService.inserir_duplas_primeira_rodada(
             dupla_ga, torneio.id, 4, "a"
@@ -106,16 +106,16 @@ def test_inserir_duplas_primeira_rodada_chave_perfeita(db_session, app):
             assert chave.grupo == "a"
 
 
-def test_criar_primeira_comp_impar(db_session, app):
+def test_criar_primeira_comp_impar(app):
     nome_torneio = "Rankeia"
     with app.app_context():
         torneio = Torneio(nome_torneio=nome_torneio)
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         lista_de_competidores = []
         competidor = Competidor(nome_competidor="nome", torneio_id=torneio.id)
-        db_session.add(competidor)
-        db_session.commit()
+        db.session.add(competidor)
+        db.session.commit()
         lista_de_competidores.append(competidor)
         lista_de_competidores.append(None)
         _, duplas_gb = criar_sublista_em_pares(lista_de_competidores)
@@ -131,28 +131,28 @@ def test_criar_primeira_comp_impar(db_session, app):
         assert chave.vencedor.id == competidor.id
 
 
-def criar_torneio_e_competidores(db_session, app):
+def criar_torneio_e_competidores(app):
     nome_torneio = "Rankeia"
     with app.app_context():
         torneio = Torneio(nome_torneio=nome_torneio)
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
 
         lista_de_competidores = []
         for nome in "abcdefghijklmnop":
             competidor = Competidor(nome_competidor=nome)
             lista_de_competidores.append(competidor)
-            db_session.add(competidor)
-        db_session.commit()
+            db.session.add(competidor)
+        db.session.commit()
 
     return torneio, lista_de_competidores
 
 
-def test_criar_rodadas_subsequentes_chave_perfeita(db_session, app):
+def test_criar_rodadas_subsequentes_chave_perfeita(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Perola")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         response = ChaveamentoService.criar_rodadas_subsequentes(5, 32, torneio)
         rodada_4 = response[0]  # chaveamento 3 oitavas
         rodada_3 = response[1]  # chaveamento 3 quartas
@@ -167,11 +167,11 @@ def test_criar_rodadas_subsequentes_chave_perfeita(db_session, app):
         assert rodada_terceiro_lugar.grupo == "f"
 
 
-def test_criar_rodadas_subsequentes_sem_potencia_dois(db_session, app):
+def test_criar_rodadas_subsequentes_sem_potencia_dois(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Perola")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         response = ChaveamentoService.criar_rodadas_subsequentes(5, 20, torneio)
         rodada_4 = response[0]  # chaveamento 3 oitavas
         rodada_3 = response[1]  # chaveamento 3 quartas
@@ -186,15 +186,15 @@ def test_criar_rodadas_subsequentes_sem_potencia_dois(db_session, app):
         assert rodada_terceiro_lugar.grupo == "f"
 
 
-def test_busca_chaveamento_dispara_chaveamento(db_session, app):
+def test_busca_chaveamento_dispara_chaveamento(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Perola")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         for nome in "abcdefghijklmnop":
             i = Competidor(nome_competidor=nome, torneio_id=torneio.id)
-            db_session.add(i)
-        db_session.commit()
+            db.session.add(i)
+        db.session.commit()
         response = ChaveamentoService.busca_chaveamento(torneio.id)
         contagem_por_rodada = defaultdict(int)
         contagem_por_rodada = defaultdict(int)
@@ -209,15 +209,15 @@ def test_busca_chaveamento_dispara_chaveamento(db_session, app):
         assert grupo is True
 
 
-def test_sorteia_chaveamento_primeira_fase(db_session, app):
+def test_sorteia_chaveamento_primeira_fase(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Perola")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         for nome in "abcdefghijklmnop":
             i = Competidor(nome_competidor=nome, torneio_id=torneio.id)
-            db_session.add(i)
-        db_session.commit()
+            db.session.add(i)
+        db.session.commit()
         (
             numero_primeira_rodada,
             lista_geral_primeira_rodada,
@@ -236,21 +236,21 @@ def test_sorteia_chaveamento_primeira_fase(db_session, app):
         assert len(lista_b) == 4
 
 
-def test_cadastrar_resultado(db_session, app):
+def test_cadastrar_resultado(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Perola")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         competidor_a = Competidor(nome_competidor="Clara", torneio_id=torneio.id)
         competidor_b = Competidor(nome_competidor="Santos", torneio_id=torneio.id)
-        db_session.add(competidor_a)
-        db_session.add(competidor_b)
-        db_session.commit()
+        db.session.add(competidor_a)
+        db.session.add(competidor_b)
+        db.session.commit()
         partida = Chave(torneio.id, 4, "a", competidor_a.id, competidor_b.id)
         proxima_chave = Chave(torneio.id, 3, "a")
-        db_session.add(partida)
-        db_session.add(proxima_chave)
-        db_session.commit()
+        db.session.add(partida)
+        db.session.add(proxima_chave)
+        db.session.commit()
         resultado_partida = models_pydantic.ResultadoPartidaRequest(
             resultado_comp_a=2, resultado_comp_b=1
         )
@@ -263,17 +263,17 @@ def test_cadastrar_resultado(db_session, app):
         assert partida_atualizada.vencedor.id == competidor_a.id
 
 
-def test_tentativa_cadastrar_resultado_sem_comp(db_session, app):
+def test_tentativa_cadastrar_resultado_sem_comp(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Perola")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         competidor_a = Competidor(nome_competidor="Clara", torneio_id=torneio.id)
-        db_session.add(competidor_a)
-        db_session.commit()
+        db.session.add(competidor_a)
+        db.session.commit()
         partida = Chave(torneio.id, 4, "a", competidor_a.id)
-        db_session.add(partida)
-        db_session.commit()
+        db.session.add(partida)
+        db.session.commit()
         resultado_partida = models_pydantic.ResultadoPartidaRequest(
             resultado_comp_a=2, resultado_comp_b=1
         )
@@ -283,16 +283,16 @@ def test_tentativa_cadastrar_resultado_sem_comp(db_session, app):
             )
 
 
-def test_classificacao_das_finais(db_session, app):
+def test_classificacao_das_finais(app):
     nome_torneio = "Rankeia"
     with app.app_context():
         torneio = Torneio(nome_torneio=nome_torneio)
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
 
         competidor_a = Competidor(nome_competidor="Clara", torneio_id=torneio.id)
         competidor_b = Competidor(nome_competidor="Santos", torneio_id=torneio.id)
-        db_session.add(competidor_a)
+        db.session.add(competidor_a)
         chaveFinal = Chave(
             torneio_id=torneio.id,
             rodada=1,
@@ -303,10 +303,10 @@ def test_classificacao_das_finais(db_session, app):
             rodada=0,
             grupo="f",
         )
-        db_session.add(chaveFinal)
-        db_session.add(chaveTerceira)
-        db_session.add(competidor_b)
-        db_session.commit()
+        db.session.add(chaveFinal)
+        db.session.add(chaveTerceira)
+        db.session.add(competidor_b)
+        db.session.commit()
 
         chavinha = Chave(
             torneio_id=torneio.id,
@@ -316,8 +316,8 @@ def test_classificacao_das_finais(db_session, app):
             grupo="a",
         )
         chavinha.vencedor_id = competidor_a.id
-        db_session.add(chavinha)
-        db_session.commit()
+        db.session.add(chavinha)
+        db.session.commit()
 
         vencedor_id = competidor_a.id
         perdedor_id = competidor_b.id
@@ -329,13 +329,13 @@ def test_classificacao_das_finais(db_session, app):
         assert resultado == "Classificação das finais"
 
 
-def test_buscar_topquatro_com_classificacao(client, db_session, app):
+def test_buscar_topquatro_com_classificacao(client, app):
     nome_torneio = "Rankeia"
     with app.app_context():
         torneio = Torneio(nome_torneio=nome_torneio)
         torneio.is_chaveado = True
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
 
         competidor_primeiro_lugar = Competidor(
             nome_competidor="Segundo Lugar", torneio_id=torneio.id
@@ -347,11 +347,11 @@ def test_buscar_topquatro_com_classificacao(client, db_session, app):
             nome_competidor="Terceiro", torneio_id=torneio.id
         )
         competidor_quarto = Competidor(nome_competidor="Quarto", torneio_id=torneio.id)
-        db_session.add(competidor_primeiro_lugar)
-        db_session.add(competidor_segundo_lugar)
-        db_session.add(competidor_terceiro)
-        db_session.add(competidor_quarto)
-        db_session.commit()
+        db.session.add(competidor_primeiro_lugar)
+        db.session.add(competidor_segundo_lugar)
+        db.session.add(competidor_terceiro)
+        db.session.add(competidor_quarto)
+        db.session.commit()
 
         chaveFinal = Chave(
             torneio_id=torneio.id,
@@ -362,10 +362,10 @@ def test_buscar_topquatro_com_classificacao(client, db_session, app):
         )
         chaveFinal.resultado_comp_a = 1
         chaveFinal.resultado_comp_b = 2
-        db_session.add(chaveFinal)
-        db_session.commit()
+        db.session.add(chaveFinal)
+        db.session.commit()
         chaveFinal.vencedor_id = competidor_segundo_lugar.id
-        db_session.commit()
+        db.session.commit()
 
         chaveTerceira = Chave(
             torneio_id=torneio.id,
@@ -377,8 +377,8 @@ def test_buscar_topquatro_com_classificacao(client, db_session, app):
         chaveTerceira.resultado_comp_a = 1
         chaveTerceira.resultado_comp_b = 0
         chaveTerceira.vencedor_id = competidor_terceiro.id
-        db_session.add(chaveTerceira)
-        db_session.commit()
+        db.session.add(chaveTerceira)
+        db.session.commit()
         dict_classificacao = ResultadoService.buscar_resultado_top(torneio.id)
         assert "Terceiro" in dict_classificacao
         assert competidor_terceiro.id == dict_classificacao["Terceiro"].id
@@ -390,66 +390,66 @@ def test_buscar_topquatro_com_classificacao(client, db_session, app):
         assert dict_classificacao["Segundo"].id == competidor_primeiro_lugar.id
 
 
-def test_buscar_torneio_por_id(db_session, app):
+def test_buscar_torneio_por_id(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Exemplo")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         filtros = models_pydantic.FiltroTorneio(id=torneio.id)
         result = TorneioService.buscar_torneio(filtros)
         assert torneio.id == result[0].id
 
 
-def test_buscar_torneio_por_nome_torneio(db_session, app):
+def test_buscar_torneio_por_nome_torneio(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Exemplo")
         torneio_com_outro_nome = Torneio(nome_torneio="Outro nome")
         torneio_nome_tres = Torneio(nome_torneio="Nomee outro")
-        db_session.add(torneio)
-        db_session.add(torneio_com_outro_nome)
-        db_session.add(torneio_nome_tres)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.add(torneio_com_outro_nome)
+        db.session.add(torneio_nome_tres)
+        db.session.commit()
         filtros = models_pydantic.FiltroTorneio(nome_torneio="Exemplo")
         result = TorneioService.buscar_torneio(filtros)
         assert torneio.id == result[0].id
 
 
-def test_buscar_torneio_sem_filtros(db_session, app):
+def test_buscar_torneio_sem_filtros(app):
     with app.app_context():
         torneio1 = Torneio(nome_torneio="Exemplo1")
         torneio2 = Torneio(nome_torneio="Exemplo2")
-        db_session.add(torneio1)
-        db_session.add(torneio2)
-        db_session.commit()
+        db.session.add(torneio1)
+        db.session.add(torneio2)
+        db.session.commit()
         result = TorneioService.buscar_torneio(models_pydantic.FiltroTorneio())
         assert torneio1.id in [t.id for t in result]
         assert torneio2.id in [t.id for t in result]
 
 
-def test_filtra_chaves_rodada_torneio_not_closed(db_session, app):
+def test_filtra_chaves_rodada_torneio_not_closed(app):
     filtro_pydantic = models_pydantic.FiltroChave(torneio_id=1, rodada=2)
     with app.app_context():
         with pytest.raises(TorneioNotClosedError):
             ChaveamentoService.filtra_chaves_rodada(filtro_pydantic)
 
 
-def test_filtra_chaves_rodada(db_session, app):
+def test_filtra_chaves_rodada(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Torneiozao")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         for i in range(8):
             chave = Chave(torneio_id=torneio.id, rodada=4, grupo="a")
-            db_session.add(chave)
-            db_session.commit()
+            db.session.add(chave)
+            db.session.commit()
         for i in range(4):
             chave = Chave(torneio_id=torneio.id, rodada=3, grupo="a")
-            db_session.add(chave)
-            db_session.commit()
+            db.session.add(chave)
+            db.session.commit()
         for i in range(4):
             chave = Chave(torneio_id=555, rodada=4, grupo="a")
-            db_session.add(chave)
-            db_session.commit()
+            db.session.add(chave)
+            db.session.commit()
         filtro_pydantic = models_pydantic.FiltroChave(
             torneio_id=torneio.id, rodada=4, grupo="a"
         )
@@ -458,19 +458,19 @@ def test_filtra_chaves_rodada(db_session, app):
         assert all(torneio.id == t.torneio_id for t in resultado)
 
 
-def test_filtra_chaves_grupo(db_session, app):
+def test_filtra_chaves_grupo(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Torneiozao")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         for i in range(8):
             chave = Chave(torneio_id=torneio.id, rodada=4, grupo="a")
-            db_session.add(chave)
-            db_session.commit()
+            db.session.add(chave)
+            db.session.commit()
         for i in range(4):
             chave = Chave(torneio_id=torneio.id, rodada=4, grupo="b")
-            db_session.add(chave)
-            db_session.commit()
+            db.session.add(chave)
+            db.session.commit()
         filtro_pydantic = models_pydantic.FiltroChave(
             torneio_id=torneio.id, rodada=4, grupo="a"
         )
@@ -480,19 +480,19 @@ def test_filtra_chaves_grupo(db_session, app):
         assert all(elemento == "a" for elemento in [t.grupo for t in resultado])
 
 
-def test_filtra_chaves_torneio(db_session, app):
+def test_filtra_chaves_torneio(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Torneiozao")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         for i in range(8):
             chave = Chave(torneio_id=torneio.id, rodada=4, grupo="a")
-            db_session.add(chave)
-            db_session.commit()
+            db.session.add(chave)
+            db.session.commit()
         for i in range(4):
             chave = Chave(torneio_id=torneio.id, rodada=4, grupo="b")
-            db_session.add(chave)
-            db_session.commit()
+            db.session.add(chave)
+            db.session.commit()
         filtro_pydantic = models_pydantic.FiltroChave(torneio_id=torneio.id)
         resultado = ChaveamentoService.filtra_chaves_rodada(filtro_pydantic)
         assert len(resultado) == 12
@@ -516,15 +516,15 @@ def test_filtra_chaves_torneio(db_session, app):
         (25, 2),  # Caso com um número ímpar de competidores.
     ],
 )
-def test_marca_rodadas_bye(qtd_comp, byes_esperados, db_session, app):
+def test_marca_rodadas_bye(qtd_comp, byes_esperados, app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Torneiozao")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         for i in range(qtd_comp):
             comp = Competidor(nome_competidor=i, torneio_id=torneio.id)
-            db_session.add(comp)
-            db_session.commit()
+            db.session.add(comp)
+            db.session.commit()
         n, lista_g, qa, qb = ChaveamentoService.sorteia_chaveamento_primeira_fase(
             torneio
         )
@@ -534,15 +534,15 @@ def test_marca_rodadas_bye(qtd_comp, byes_esperados, db_session, app):
 
 
 @pytest.fixture
-def torneio_byes(db_session, app):
+def torneio_byes(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Frida")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         for nome in "abcdefghij":  # 10 competidores
             i = Competidor(nome_competidor=nome, torneio_id=torneio.id)
-            db_session.add(i)
-        db_session.commit()
+            db.session.add(i)
+        db.session.commit()
         (
             n_primeira_rodada,
             lista_geral_primeira_rodada,
@@ -556,12 +556,12 @@ def torneio_byes(db_session, app):
             n_primeira_rodada, qtd_comps_ga, qtd_comps_gb, torneio.id
         )
         torneio.is_chaveado = True
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         return torneio.id
 
 
-def test_busca_verificar_passagem_automatica_byebyes(db_session, app, torneio_byes):
+def test_busca_verificar_passagem_automatica_byebyes(app, torneio_byes):
     with app.app_context():
         torneio_id = torneio_byes
         lista_chaveada_primeira_rodada = (
@@ -596,9 +596,7 @@ def test_busca_verificar_passagem_automatica_byebyes(db_session, app, torneio_by
         assert len(lista_chaveada_primeira_rodada) == 14
 
 
-def test_busca_verificar_passagem_automatica_byebyes_segunda_rodada(
-    db_session, app, torneio_byes
-):
+def test_busca_verificar_passagem_automatica_byebyes_segunda_rodada(app, torneio_byes):
     with app.app_context():
         torneio_id = torneio_byes
         lista_chaveada_primeira_rodada = (
@@ -612,7 +610,7 @@ def test_busca_verificar_passagem_automatica_byebyes_segunda_rodada(
                 chave.competidor_b is None
                 chave.competidor_a is None
                 chave.competidor_a = competidor_qualquer
-                db_session.commit()
+                db.session.commit()
         rechamada = ResultadoService.classifica_proxima_rodada_bybye(torneio_id)
         assert len(rechamada) == 14
         for chave in rechamada:
@@ -621,15 +619,15 @@ def test_busca_verificar_passagem_automatica_byebyes_segunda_rodada(
                 assert chave.vencedor is None
 
 
-def test_busca_nao_ocorre_passagem_automatica_byebyes_chave_perfeita(db_session, app):
+def test_busca_nao_ocorre_passagem_automatica_byebyes_chave_perfeita(app):
     with app.app_context():
         torneio = Torneio(nome_torneio="Frida")
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         for nome in "abcdefgh":  # 8 competidores
             i = Competidor(nome_competidor=nome, torneio_id=torneio.id)
-            db_session.add(i)
-        db_session.commit()
+            db.session.add(i)
+        db.session.commit()
         (
             n_primeira_rodada,
             lista_geral_primeira_rodada,
@@ -643,8 +641,8 @@ def test_busca_nao_ocorre_passagem_automatica_byebyes_chave_perfeita(db_session,
             n_primeira_rodada, qtd_comps_ga, qtd_comps_gb, torneio.id
         )
         torneio.is_chaveado = True
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(torneio)
+        db.session.commit()
         lista_chaveada = ResultadoService.classifica_proxima_rodada_bybye(torneio.id)
         for chave in lista_chaveada:
             assert chave.bye is False
@@ -652,7 +650,7 @@ def test_busca_nao_ocorre_passagem_automatica_byebyes_chave_perfeita(db_session,
         assert len(lista_chaveada) == 8
 
 
-def test_classificar_proxima_rodada(db_session, app):
+def test_classificar_proxima_rodada(app):
     nome_torneio = "Rankeia"
 
     with app.app_context():
@@ -665,11 +663,11 @@ def test_classificar_proxima_rodada(db_session, app):
         resultado_partida = models_pydantic.ResultadoPartidaRequest(
             resultado_comp_a=2, resultado_comp_b=1
         )
-        db_session.add(competidor_a)
-        db_session.add(competidor_b)
-        db_session.add(competidor_a_ja_classificado)
-        db_session.add(torneio)
-        db_session.commit()
+        db.session.add(competidor_a)
+        db.session.add(competidor_b)
+        db.session.add(competidor_a_ja_classificado)
+        db.session.add(torneio)
+        db.session.commit()
 
         chaveamento_obj = Chave(
             torneio_id=torneio.id,
@@ -695,11 +693,11 @@ def test_classificar_proxima_rodada(db_session, app):
             competidor_a_id=competidor_a_ja_classificado.id,
         )
 
-        db_session.add(chaveamento_obj)
-        db_session.add(chaveamento_obj)
-        db_session.add(proxima_chave_com_compts)
-        db_session.add(proxima_chave_sem_compts)
-        db_session.commit()
+        db.session.add(chaveamento_obj)
+        db.session.add(chaveamento_obj)
+        db.session.add(proxima_chave_com_compts)
+        db.session.add(proxima_chave_sem_compts)
+        db.session.commit()
         response = ResultadoService.classificar_proxima_rodada(
             chaveamento_obj.vencedor_id, competidor_b.id, chaveamento_obj, torneio.id
         )

@@ -22,7 +22,6 @@ def create_app(config_mode):
 
     app.register_blueprint(api_blueprint)
     with app.app_context():
-        # Aplicar migrações durante a inicialização
         db.create_all()
 
     return app
